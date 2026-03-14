@@ -1,0 +1,109 @@
+# 뉴스 수집 AI 에이전트 설정
+# 키워드·소스·주기 변경 시 이 파일을 수정하면 다음 수집부터 반영됩니다.
+
+schedule:
+  # 체크 주기(분). 짧을수록 새 글을 빨리 반영. 매 회차는 새 기사만 추가·기존 그룹에 병합만 함.
+  interval_minutes: 15
+  # 수집 창: 이 시간 안에 나온 뉴스만 수집 (기본 1 = 최근 1시간)
+  collect_hours: 1
+
+# 수집량: RSS는 소스당 max_entries(기본 100), GNews는 키워드당 max(기본 10, 플랜에 따라 25/50/100 가능)
+sources:
+  - type: rss
+    url: "https://feeds.feedburner.com/TechCrunch"
+    name: TechCrunch
+    max_entries: 100
+  - type: rss
+    url: "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml"
+    name: The Verge AI
+    max_entries: 50
+    collect_hours: 12
+  - type: rss
+    url: "https://arstechnica.com/ai/feed/"
+    name: Ars Technica AI
+    max_entries: 50
+    collect_hours: 12
+  - type: rss
+    url: "https://www.technologyreview.com/topic/artificial-intelligence/feed"
+    name: MIT Tech Review AI
+    max_entries: 40
+    collect_hours: 48
+  - type: rss
+    url: "https://openai.com/news/rss.xml"
+    name: OpenAI News
+    max_entries: 40
+    collect_hours: 168
+  - type: rss
+    url: "https://anthropic.com/news/feed_anthropic.xml"
+    name: Anthropic News
+    max_entries: 40
+    collect_hours: 168
+  - type: rss
+    url: "https://deepmind.google/blog/rss.xml"
+    name: Google DeepMind Blog
+    max_entries: 40
+    collect_hours: 168
+  - type: rss
+    url: "https://ai.googleblog.com/feeds/posts/default?alt=rss"
+    name: Google Research Blog
+    max_entries: 40
+    collect_hours: 168
+  - type: rss
+    url: "https://huggingface.co/blog/feed.xml"
+    name: Hugging Face Blog
+    max_entries: 40
+    collect_hours: 168
+  - type: rss
+    url: "https://news.google.com/rss/search?q=AI+finance+when:1h&hl=ko&gl=KR&ceid=KR:ko"
+    name: Google News AI/Finance
+    max_entries: 100
+  - type: rss
+    url: "https://news.google.com/rss/search?q=증권+when:1h&hl=ko&gl=KR&ceid=KR:ko"
+    name: Google News 증권
+    max_entries: 100
+  - type: rss
+    url: "https://news.google.com/rss/search?q=금융+when:1h&hl=ko&gl=KR&ceid=KR:ko"
+    name: Google News 금융
+    max_entries: 100
+  - type: rss
+    url: "https://news.google.com/rss/search?q=AI+인공지능+when:1h&hl=ko&gl=KR&ceid=KR:ko"
+    name: Google News AI
+    max_entries: 100
+  - type: gnews
+    api_key_env: GNEWS_API_KEY
+    max: 10
+    keywords:
+      - "증권사 AI"
+      - "ChatGPT"
+      - "Claude AI"
+      - "Financial AI"
+      - "미래에셋증권"
+      - "금융 AI"
+      - "증권 뉴스"
+
+google_ai:
+  api_key_env: GOOGLE_AI_API_KEY
+  model: "gemini-2.5-flash-lite"
+  # RPM 4k, TPM 4M 한계 고려: 호출 간 최소 간격(초). 1이면 분당 약 60회 미만.
+  min_interval_seconds: 1.0
+  # 한 번에 Gemini 호출할 최대 기사 수 (제한 시 나머지는 요약/분류 생략)
+  max_articles_per_run: 50
+  # 통합한 내용(합집합): true면 '정보 추출 → 합집합 서사 작성' 2단계로 사람 분석처럼 병합 (권장)
+  merge_content_union_style: true
+
+storage:
+  path: "./data/news.db"
+
+web:
+  password_env: WEB_PASSWORD
+  session_ttl_hours: 168
+
+dedup:
+  # 같은 사건(예: 김시현 골프) 다른 매체 제목도 묶이도록 0.75 권장. 높이면 그룹 적고, 낮추면 묶임 많아짐.
+  title_similarity_threshold: 0.75
+  use_embedding: false
+  # true면 LLM으로 '사건 식별 문구'를 뽑아서 같은 내용인지 사람처럼 판단 (재그룹·파이프라인 모두 적용)
+  use_llm_event_identifier: true
+  # 식별자 유사도가 이 구간일 때 LLM으로 "같은 사건?" 한 번 더 물어봄 (비용 절감용, 0이면 비활성)
+  llm_same_event_gray_zone_min: 0.45
+  llm_same_event_gray_zone_max: 0.78

@@ -1,0 +1,16 @@
+.git
+.env
+.env.*
+__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+*.db
+data/*.db
+data/*.log
+*.log
+.venv
+venv
+.cursor
+*.md
+!README.md

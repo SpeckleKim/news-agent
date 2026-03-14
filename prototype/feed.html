@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>피드 — 뉴스 에이전트</title>
+  <link rel="stylesheet" href="css/app.css">
+  <script src="js/auth.js"></script>
+  <script>if (!requireAuth()) {};</script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <a href="feed.html" class="logo">뉴스 에이전트</a>
+  </header>
+
+  <main class="main-content">
+    <div x-data="feedControls()">
+      <div class="card controls-card">
+        <div class="controls-row controls-row-sort">
+          <span class="text-muted">일별로 보기 · 해당 일은 중요도 순으로 정렬됩니다.</span>
+        </div>
+
+        <form class="controls-search" action="search.html" method="get" role="search">
+          <input type="search" name="q" placeholder="제목·요약·키워드 검색" aria-label="검색어">
+          <button type="submit" class="btn-primary">검색</button>
+        </form>
+
+        <div class="controls-grid">
+          <div class="controls-field">
+            <label>카테고리</label>
+            <select x-model="category" @change="typeof getFeedItemsFromAPI==='function' && loadDatesThenPage(1)">
+              <option value="">전체</option>
+              <template x-for="c in filterCategories" :key="c">
+                <option :value="c" x-text="c"></option>
+              </template>
+            </select>
+          </div>
+          <div class="controls-field">
+            <label>키워드</label>
+            <select x-model="keyword" @change="typeof getFeedItemsFromAPI==='function' && loadDatesThenPage(1)">
+              <option value="">전체</option>
+              <template x-for="k in filterKeywords" :key="k">
+                <option :value="k" x-text="k"></option>
+              </template>
+            </select>
+          </div>
+          <div class="controls-field">
+            <label>출처</label>
+            <select x-model="source" @change="typeof getFeedItemsFromAPI==='function' && loadDatesThenPage(1)">
+              <option value="">전체</option>
+              <template x-for="s in filterSources" :key="s">
+                <option :value="s" x-text="s"></option>
+              </template>
+            </select>
+          </div>
+          <div class="controls-actions">
+            <button type="button" class="btn-secondary" @click="reset()">초기화</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-list card-list-feed">
+        <template x-if="loading">
+          <p class="text-muted">로딩 중...</p>
+        </template>
+        <template x-if="!loading && !filteredItems.length">
+          <p class="text-muted">표시할 뉴스가 없습니다.</p>
+        </template>
+
+        <template x-if="!loading && filteredItems.length">
+          <template x-for="item in itemsToShow" :key="(item.type || 'article') + '-' + item.id">
+          <div class="card card-feed"
+               :class="{
+                 'card-important-high': typeof item.importance === 'number' && item.importance >= 90,
+                 'card-important-medium': typeof item.importance === 'number' && item.importance >= 80 && item.importance < 90,
+                 'card-important-low': typeof item.importance === 'number' && item.importance < 80
+               }">
+            <template x-if="item.type === 'group'">
+              <a :href="'group.html?id=' + item.id" class="card-feed-link">
+                <span class="card-feed-title" x-text="item.merged_title || item.merged_summary || '통합 뉴스'"></span>
+                <span class="card-feed-meta">
+                  <span class="category" x-text="item.category || ''"></span>
+                  <span x-text="formatDate(item.published_at)"></span>
+                  <span x-show="typeof item.importance === 'number'" x-text="' · ' + item.importance"></span>
+                </span>
+              </a>
+            </template>
+
+            <template x-if="item.type !== 'group'">
+              <a :href="'article.html?id=' + item.id" class="card-feed-link">
+                <span class="card-feed-title" x-text="item.headline || (typeof firstSentence === 'function' ? firstSentence(item.summary) : null) || item.summary || item.title"></span>
+                <span class="card-feed-meta">
+                  <span class="category" x-text="item.category || ''"></span>
+                  <span x-text="formatDate(item.published_at)"></span>
+                  <span x-show="typeof item.importance === 'number'" x-text="' · ' + item.importance"></span>
+                  <span x-show="item.source" x-text="' · ' + item.source"></span>
+                </span>
+              </a>
+            </template>
+          </div>
+        </template>
+        </template>
+      </div>
+
+      <div class="pagination-wrap" x-show="!loading && (total > 0 || totalPages > 0)">
+        <nav class="pagination" aria-label="페이지 네비게이션">
+          <span class="pagination-info" x-text="dateLabel ? (dateLabel + ' · ' + total + '건') : ('총 ' + total + '건')"></span>
+          <div class="pagination-btns">
+            <button type="button" class="btn-pag"
+                    :disabled="page <= 1"
+                    @click="goPage(1)"
+                    aria-label="첫 페이지">«</button>
+            <button type="button" class="btn-pag"
+                    :disabled="page <= 1"
+                    @click="goPage(page - 1)"
+                    aria-label="이전">‹</button>
+            <template x-for="p in pageNumbers" :key="p">
+              <button type="button" class="btn-pag"
+                      :class="{ 'btn-pag-current': p === page }"
+                      @click="goPage(p)"
+                      x-text="feedDates.length ? getPageDateLabel(p) : p"
+                      :aria-label="'날짜 ' + (feedDates.length ? getPageDateLabel(p) : p)"></button>
+            </template>
+            <button type="button" class="btn-pag"
+                    :disabled="page >= totalPages"
+                    @click="goPage(page + 1)"
+                    aria-label="다음">›</button>
+            <button type="button" class="btn-pag"
+                    :disabled="page >= totalPages"
+                    @click="goPage(totalPages)"
+                    aria-label="마지막 페이지">»</button>
+          </div>
+        </nav>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/mock-data.js"></script>
+  <script src="js/api-client.js"></script>
+  <script>
+    function formatDateLabel(ymd) {
+      if (!ymd) return '';
+      var parts = ymd.split('-');
+      if (parts.length >= 3) return parseInt(parts[1], 10) + '월 ' + parseInt(parts[2], 10) + '일';
+      return ymd;
+    }
+    function feedControls() {
+      return {
+        category: '',
+        keyword: '',
+        source: '',
+        rawItems: [],
+        feedDates: [],
+        dateLabel: '',
+        filterCategories: ['AI', '증권', '금융', 'IB'],
+        filterKeywords: ['ChatGPT', '미래에셋증권', 'Claude', 'IB'],
+        filterSources: ['매일경제', 'TechCrunch', 'VentureBeat'],
+        loading: true,
+        page: 1,
+        _total: 0,
+        get total() {
+          return (typeof getFeedItemsFromAPI === 'function') ? this._total : (this.filteredItems ? this.filteredItems.length : 0);
+        },
+        init: function() {
+          var me = this;
+          if (typeof getFeedItemsFromAPI === 'function' && typeof getFeedDatesFromAPI === 'function') {
+            me.loadDatesThenPage(1);
+          } else {
+            getFeedItems().then(function(items) {
+              me.rawItems = items || [];
+              me.loading = false;
+            }).catch(function() {
+              me.rawItems = [];
+              me.loading = false;
+            });
+          }
+          if (typeof getFeedFiltersFromAPI === 'function') {
+            getFeedFiltersFromAPI().then(function(f) {
+              if (f && f.categories && f.categories.length) me.filterCategories = f.categories;
+              if (f && f.keywords && f.keywords.length) me.filterKeywords = f.keywords;
+              if (f && f.sources && f.sources.length) me.filterSources = f.sources;
+            }).catch(function() {});
+          }
+        },
+        loadDatesThenPage: function(p) {
+          var me = this;
+          me.loading = true;
+          var filters = { category: me.category, keyword: me.keyword, source: me.source };
+          getFeedDatesFromAPI(filters).then(function(data) {
+            me.feedDates = (data && data.dates) ? data.dates : [];
+            if (me.feedDates.length === 0) {
+              me.rawItems = [];
+              me._total = 0;
+              me.dateLabel = '';
+              me.loading = false;
+              return;
+            }
+            var pageIndex = Math.max(1, Math.min(p, me.feedDates.length));
+            var dateYmd = me.feedDates[pageIndex - 1];
+            filters.date = dateYmd;
+            getFeedItemsFromAPI(null, null, filters).then(function(res) {
+              me.rawItems = (res && res.items) ? res.items : [];
+              me._total = res && res.total != null ? res.total : 0;
+              me.dateLabel = (res && res.date_label) ? res.date_label : formatDateLabel(dateYmd);
+              me.page = pageIndex;
+              me.loading = false;
+            }).catch(function() {
+              me.rawItems = [];
+              me._total = 0;
+              me.loading = false;
+            });
+          }).catch(function() {
+            me.feedDates = [];
+            me.rawItems = [];
+            me._total = 0;
+            me.loading = false;
+          });
+        },
+        loadPageApi: function(p) {
+          if (this.feedDates.length > 0) {
+            var dateYmd = this.feedDates[p - 1];
+            if (!dateYmd) return;
+            var me = this;
+            me.loading = true;
+            getFeedItemsFromAPI(null, null, {
+              category: me.category,
+              keyword: me.keyword,
+              source: me.source,
+              date: dateYmd
+            }).then(function(res) {
+              me.rawItems = (res && res.items) ? res.items : [];
+              me._total = res && res.total != null ? res.total : 0;
+              me.dateLabel = (res && res.date_label) ? res.date_label : formatDateLabel(dateYmd);
+              me.page = p;
+              me.loading = false;
+            }).catch(function() {
+              me.loading = false;
+            });
+          } else {
+            this.loadDatesThenPage(p);
+          }
+        },
+        get filteredItems() {
+          var self = this;
+          var list = this.rawItems.filter(function(item) {
+            if (self.category && item.category !== self.category) return false;
+            if (self.source && item.source !== self.source) {
+              if (!(item.source_urls && item.source_urls.some(function(u) { return u.source === self.source; }))) {
+                return false;
+              }
+            }
+            if (self.keyword) {
+              var kw = self.keyword;
+              var hasKeyword = Array.isArray(item.keywords) && item.keywords.indexOf(kw) !== -1;
+              if (!hasKeyword) return false;
+            }
+            return true;
+          });
+          return list;
+        },
+        get totalPages() {
+          if (typeof getFeedItemsFromAPI === 'function' && typeof getFeedDatesFromAPI === 'function') {
+            return this.feedDates.length || 0;
+          }
+          return Math.max(1, Math.ceil((this.filteredItems || []).length / 8));
+        },
+        get itemsToShow() {
+          if (typeof getFeedItemsFromAPI === 'function') {
+            return this.rawItems;
+          }
+          var start = (this.page - 1) * 8;
+          return (this.filteredItems || []).slice(start, start + 8);
+        },
+        get pageNumbers() {
+          var total = this.totalPages;
+          var cur = this.page;
+          var delta = 2;
+          var low = Math.max(1, cur - delta);
+          var high = Math.min(total, cur + delta);
+          var nums = [];
+          for (var i = low; i <= high; i++) nums.push(i);
+          return nums;
+        },
+        getPageDateLabel: function(p) {
+          if (this.feedDates && this.feedDates[p - 1]) return formatDateLabel(this.feedDates[p - 1]);
+          return '' + p;
+        },
+        goPage: function(p) {
+          p = Math.max(1, Math.min(p, this.totalPages));
+          if (typeof getFeedItemsFromAPI === 'function') {
+            this.loadPageApi(p);
+          } else {
+            this.page = p;
+          }
+        },
+        reset: function() {
+          this.category = '';
+          this.keyword = '';
+          this.source = '';
+          if (typeof getFeedItemsFromAPI === 'function') {
+            this.loadDatesThenPage(1);
+          } else {
+            this.page = 1;
+          }
+        }
+      };
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+# 한 컨테이너: 웹(6800) + 15분 스케줄러
+# 사용: docker compose up -d
+services:
+  app:
+    build: .
+    ports:
+      - "6800:6800"
+    volumes:
+      - news_data:/app/data
+    environment:
+      - GOOGLE_AI_API_KEY=${GOOGLE_AI_API_KEY}
+      - GNEWS_API_KEY=${GNEWS_API_KEY}
+      - WEB_PASSWORD=${WEB_PASSWORD}
+    restart: unless-stopped
+
+volumes:
+  news_data:

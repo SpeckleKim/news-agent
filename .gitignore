@@ -1,0 +1,17 @@
+# 데이터·환경
+data/
+.env
+*.db
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# 기타
+.DS_Store

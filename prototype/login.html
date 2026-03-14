@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>로그인 — 뉴스 에이전트</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="login-page">
+  <div class="login-card">
+    <h1>뉴스 에이전트</h1>
+    <p class="text-muted mb-0" style="text-align:center; margin-bottom: 24px;">비밀번호를 입력하고 로그인하세요</p>
+    <form id="loginForm">
+      <div class="form-group">
+        <label for="password">비밀번호</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" placeholder="비밀번호 입력">
+      </div>
+      <p class="error-msg" id="errorMsg" role="alert"></p>
+      <button type="submit" class="btn-login">로그인</button>
+    </form>
+    <p class="text-muted" style="font-size:12px; margin-top:20px; text-align:center;">프로토타입: 비밀번호를 입력한 뒤 로그인하면 피드로 이동합니다.</p>
+  </div>
+  <script src="js/auth.js"></script>
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      var pwd = document.getElementById('password').value;
+      var err = document.getElementById('errorMsg');
+      if (!pwd || pwd.trim() === '') {
+        err.textContent = '비밀번호를 입력하세요.';
+        err.classList.add('show');
+        return;
+      }
+      err.classList.remove('show');
+      try {
+        var r = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ password: pwd })
+        });
+        if (r.ok) {
+          window.location.href = '/';
+          return;
+        }
+        var j = await r.json().catch(function() { return {}; });
+        err.textContent = (j.detail && (typeof j.detail === 'string' ? j.detail : j.detail.message)) || '로그인에 실패했습니다.';
+        err.classList.add('show');
+      } catch (e) {
+        setLoggedIn();
+        window.location.href = 'feed.html';
+      }
+    });
+  </script>
+</body>
+</html>

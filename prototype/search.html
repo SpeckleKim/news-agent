@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>검색 — 뉴스 에이전트</title>
+  <link rel="stylesheet" href="css/app.css">
+  <script src="js/auth.js"></script>
+  <script>if (!requireAuth()) {};</script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <a href="feed.html" class="logo">뉴스 에이전트</a>
+  </header>
+
+  <main class="main-content">
+    <div class="card controls-card">
+      <div class="controls-row">
+        <h2 class="controls-title" id="searchTitle">검색 결과</h2>
+        <div class="controls-meta text-muted">
+          정렬: 중요도 ↓ (동일 중요도면 날짜 ↓)
+        </div>
+      </div>
+
+      <form class="controls-search" action="search.html" method="get" role="search">
+        <input type="search" name="q" id="searchInput" placeholder="제목·요약·키워드 검색" aria-label="검색어" value="">
+        <button type="submit" class="btn-primary">검색</button>
+      </form>
+    </div>
+    <div class="card-list" id="cardList"></div>
+    <p id="noResults" class="text-muted" style="display:none;">검색 결과가 없습니다.</p>
+  </main>
+
+  <script src="js/mock-data.js"></script>
+  <script src="js/api-client.js"></script>
+  <script>
+    (function() {
+      var params = new URLSearchParams(window.location.search);
+      var q = (params.get('q') || '').trim();
+      var searchInput = document.getElementById('searchInput');
+      if (searchInput) searchInput.value = q;
+      var titleEl = document.getElementById('searchTitle');
+      if (titleEl) titleEl.textContent = q ? ('검색어: "' + q + '"') : '검색 결과';
+      var container = document.getElementById('cardList');
+      var noResults = document.getElementById('noResults');
+
+      function escapeHtml(s) {
+        if (!s) return '';
+        var div = document.createElement('div');
+        div.textContent = s;
+        return div.innerHTML;
+      }
+      function renderItems(items) {
+        container.innerHTML = '';
+        if (!items || !items.length) {
+          noResults.style.display = 'block';
+          return;
+        }
+        noResults.style.display = 'none';
+        items.forEach(function(item) {
+          var card = document.createElement('div');
+          card.className = 'card';
+          var meta = '<span class="category">' + (item.category || '') + '</span> ' + formatDate(item.published_at);
+          if (typeof item.importance === 'number') meta += ' · 중요도 ' + item.importance;
+          if (item.keywords && item.keywords.length) meta += ' · ' + item.keywords.slice(0, 3).join(', ');
+          if (item.type === 'group') {
+            var links = (item.source_urls || []).map(function(u, i) {
+              return '<a href="' + (u.url || '#') + '" target="_blank" rel="noopener" class="external">' + escapeHtml(u.source || '원문' + (i+1)) + '</a>';
+            }).join(' ');
+            card.innerHTML = '<h3 class="card-title"><a href="group.html?id=' + escapeHtml(item.id) + '">' + escapeHtml(item.merged_title || '통합 뉴스') + '</a></h3>' +
+              '<p class="card-summary">' + escapeHtml(item.merged_summary || '') + '</p>' +
+              '<p class="card-meta">' + meta + '</p>' +
+              '<p class="card-links">' + links + '</p>';
+          } else {
+            card.innerHTML = '<h3 class="card-title"><a href="article.html?id=' + escapeHtml(item.id) + '">' + escapeHtml(item.title || '') + '</a></h3>' +
+              '<p class="card-summary">' + escapeHtml(item.summary || '') + '</p>' +
+              '<p class="card-meta">' + meta + ' · ' + escapeHtml(item.source || '') + '</p>' +
+              '<p class="card-links"><a href="' + escapeHtml(item.url || '#') + '" target="_blank" rel="noopener" class="external">원문 보기</a></p>';
+          }
+          container.appendChild(card);
+        });
+      }
+
+      if (typeof searchFromAPI === 'function' && q) {
+        searchFromAPI(q).then(function(data) {
+          var items = (data && data.items) ? data.items : [];
+          renderItems(items);
+        }).catch(function() {
+          renderItems([]);
+        });
+      } else {
+        var items = getFeedItems();
+        if (q) {
+          var lower = q.toLowerCase();
+          items = items.filter(function(item) {
+            var text = (item.type === 'group' ? ((item.merged_title || '') + ' ' + (item.merged_summary || '')) : ((item.title || '') + ' ' + (item.summary || ''))) + ' ' + (item.keywords || []).join(' ');
+            return text.toLowerCase().indexOf(lower) !== -1;
+          });
+        }
+        items = items.slice().sort(function(a, b) {
+          var ai = (typeof a.importance === 'number') ? a.importance : 0;
+          var bi = (typeof b.importance === 'number') ? b.importance : 0;
+          if (bi !== ai) return bi - ai;
+          return new Date(b.published_at || 0).getTime() - new Date(a.published_at || 0).getTime();
+        });
+        renderItems(items);
+      }
+    })();
+  </script>
+</body>
+</html>

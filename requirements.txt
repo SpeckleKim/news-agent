@@ -1,0 +1,22 @@
+# 스케줄링
+apscheduler>=3.10.0
+
+# 설정
+pyyaml>=6.0
+
+# 뉴스 수집
+feedparser>=6.0.0
+requests>=2.28.0
+readability-lxml>=0.8.0
+lxml>=4.9.0
+googlenewsdecoder>=0.1.7
+
+# Google AI (Gemini)
+google-genai>=1.0.0
+
+# 웹
+fastapi>=0.100.0
+uvicorn[standard]>=0.22.0
+
+# 유틸
+python-dotenv>=1.0.0

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>통합 뉴스 상세 — 뉴스 에이전트</title>
+  <link rel="stylesheet" href="css/app.css">
+  <script src="js/auth.js"></script>
+  <script>if (!requireAuth()) {};</script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <a href="feed.html" class="logo">뉴스 에이전트</a>
+    <form class="search-form" action="search.html" method="get" role="search">
+      <input type="search" name="q" placeholder="제목·요약·키워드 검색" aria-label="검색어">
+      <button type="submit">검색</button>
+    </form>
+  </header>
+
+  <main class="main-content" x-data="groupDetail()" x-init="init()">
+    <div class="detail-back">
+      <a href="feed.html">← 목록으로</a>
+    </div>
+
+    <template x-if="group">
+      <div>
+        <div class="detail-header">
+          <h1 x-text="group.merged_title"></h1>
+          <div class="detail-meta">
+            <span class="category" x-text="group.category"></span>
+            <span x-text="formatDate(group.published_at)"></span>
+            <template x-if="group.keywords && group.keywords.length">
+              <span> · <span x-text="group.keywords.join(', ')"></span></span>
+            </template>
+          </div>
+        </div>
+
+        <div class="detail-body">
+          <h3 class="detail-subtitle">통합 요약</h3>
+          <p class="summary" x-text="stripHtml(group.merged_summary || '')"></p>
+        </div>
+
+        <div class="detail-body merged-content-section">
+          <h3 class="detail-subtitle">통합한 내용</h3>
+          <div class="merged-content-body" style="white-space:pre-wrap;" x-text="stripHtml(contentForDisplay)"></div>
+        </div>
+
+        <div class="related-news-section" x-show="relatedNewsList.length">
+          <h2 class="detail-subtitle">이 카드에 묶인 기사 목록</h2>
+          <p class="text-muted" style="font-size:12px; margin:0 0 8px;">아래 항목을 누르면 해당 매체 원문으로 이동합니다.</p>
+          <ul class="related-news-list">
+            <template x-for="(item, idx) in relatedNewsList" :key="idx">
+              <li><a :href="item.url" target="_blank" rel="noopener" x-text="item.title || ('원문 ' + (idx + 1))"></a></li>
+            </template>
+          </ul>
+        </div>
+      </div>
+    </template>
+
+    <p x-show="!group && !loading" class="text-muted">통합 뉴스를 찾을 수 없습니다. <a href="feed.html">목록으로</a></p>
+    <p x-show="loading" class="text-muted">로딩 중...</p>
+  </main>
+
+  <script src="js/mock-data.js"></script>
+  <script src="js/api-client.js"></script>
+  <script>
+    function groupDetail() {
+      return {
+        groupId: null,
+        group: null,
+        loading: true,
+        get relatedNewsList() {
+          if (!this.group) return [];
+          if (this.group.source_articles && this.group.source_articles.length)
+            return this.group.source_articles.map(function(s) { return { title: s.title, url: s.url }; });
+          if (this.group.source_urls && this.group.source_urls.length)
+            return this.group.source_urls.map(function(u) { return { title: u.title || u.source || '원문', url: u.url }; });
+          return [];
+        },
+        get contentForDisplay() {
+          if (!this.group) return '';
+          var sum = this.group.merged_summary || '';
+          var cnt = this.group.merged_content || '';
+          return (cnt.length >= sum.length ? cnt : sum) || '';
+        },
+        init: function() {
+          var params = new URLSearchParams(window.location.search);
+          this.groupId = params.get('id') || '';
+          var me = this;
+          function done() { me.loading = false; }
+
+          if (typeof getGroupFromAPI === 'function') {
+            getGroupFromAPI(this.groupId).then(function(data) {
+              if (data) me.group = data;
+              done();
+            }).catch(function() { done(); });
+          } else {
+            me.group = getGroup(this.groupId);
+            done();
+          }
+        },
+        formatDate: function(isoStr) {
+          return formatDate(isoStr);
+        },
+        stripHtml: function(html) {
+          if (!html) return '';
+          var div = document.createElement('div');
+          div.innerHTML = html;
+          return (div.textContent || div.innerText || '').trim();
+        }
+      };
+    }
+  </script>
+</body>
+</html>
