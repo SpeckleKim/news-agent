@@ -250,7 +250,13 @@ def regroup_recent_articles(repo: Repository, config: dict, limit: int = 33) -> 
             identifiers.append(ident or (a.title or "")[:100])
         for i in range(n):
             for j in range(i + 1, n):
-                sim = _title_similarity(identifiers[i], identifiers[j])
+                ti, tj = recent[i].title or "", recent[j].title or ""
+                idi, idj = identifiers[i], identifiers[j]
+                sim = max(
+                    _title_similarity(idi, idj),
+                    _title_similarity(ti, idj),
+                    _title_similarity(idi, tj),
+                )
                 if sim >= threshold:
                     pi, pj = _union_find_parent(parent, i), _union_find_parent(parent, j)
                     if pi != pj:

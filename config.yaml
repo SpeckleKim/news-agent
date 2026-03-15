@@ -99,11 +99,11 @@ web:
   session_ttl_hours: 168
 
 dedup:
-  # 같은 사건(예: 김시현 골프) 다른 매체 제목도 묶이도록 0.75 권장. 높이면 그룹 적고, 낮추면 묶임 많아짐.
-  title_similarity_threshold: 0.75
+  # 같은 사건 다른 매체도 묶이도록. 0.70으로 낮추면 그룹화 많아짐(과도하면 오탐 가능).
+  title_similarity_threshold: 0.70
   use_embedding: false
   # true면 LLM으로 '사건 식별 문구'를 뽑아서 같은 내용인지 사람처럼 판단 (재그룹·파이프라인 모두 적용)
   use_llm_event_identifier: true
-  # 식별자 유사도가 이 구간일 때 LLM으로 "같은 사건?" 한 번 더 물어봄 (비용 절감용, 0이면 비활성)
-  llm_same_event_gray_zone_min: 0.45
-  llm_same_event_gray_zone_max: 0.78
+  # 식별자 유사도가 이 구간일 때 LLM으로 "같은 사건?" 한 번 더 물어봄. 구간 넓히면 묶임 증가.
+  llm_same_event_gray_zone_min: 0.40
+  llm_same_event_gray_zone_max: 0.80

@@ -141,7 +141,12 @@ def run_dedup(
         for eid in recent_titles:
             etitle, _ = recent_titles[eid]
             ref_e = _ref_recent(eid)
-            sim = _title_similarity(ref_a, ref_e)
+            # 식별자만 비교하면 LLM이 같은 사건인데 다른 문구를 줄 때 묶이지 않음 → 제목 vs 식별자 조합도 사용
+            sim = max(
+                _title_similarity(ref_a, ref_e),
+                _title_similarity(a.title or "", ref_e),
+                _title_similarity(ref_a, etitle or ""),
+            )
             if sim >= threshold:
                 g = repo.get_group_for_article(eid)
                 if g:
@@ -162,7 +167,11 @@ def run_dedup(
         if not matched_gid and not matched_standalone_id:
             for bid, btitle, b_ident, b_art in current_batch:
                 ref_b = (b_ident or "").strip() or btitle
-                sim = _title_similarity(ref_a, ref_b)
+                sim = max(
+                    _title_similarity(ref_a, ref_b),
+                    _title_similarity(a.title or "", ref_b),
+                    _title_similarity(ref_a, btitle or ""),
+                )
                 if sim >= threshold:
                     matched_from_batch = b_art
                     break
