@@ -22,6 +22,11 @@ def _parse_iso(s: Optional[str]) -> Optional[datetime]:
         return None
 
 
+def _kst_date_sql(column: str) -> str:
+    """published_at(UTC)을 KST 기준 날짜로 쓰는 SQLite 식. column은 테이블 별칭 없이 컬럼명만."""
+    return f"date(datetime(replace(replace(trim({column}), 'Z', ''), 'T', ' '), '+9 hours'))"
+
+
 class Repository:
     def __init__(self, db_path: str):
         self.db_path = db_path
@@ -225,7 +230,7 @@ class Repository:
                 sql += " AND source=?"
                 params.append(source)
             if date_ymd:
-                sql += " AND date(published_at)=?"
+                sql += f" AND {_kst_date_sql('published_at')}=?"
                 params.append(date_ymd)
             sql += " ORDER BY importance DESC, published_at DESC LIMIT ? OFFSET ?"
             params.extend([limit, offset])
@@ -235,11 +240,11 @@ class Repository:
     def get_feed_dates(self, limit: int = 60,
                        category: Optional[str] = None, keyword: Optional[str] = None,
                        source: Optional[str] = None) -> List[str]:
-        """피드에 나타날 수 있는 날짜 목록 (최신순). 날짜별 페이지네이션용."""
+        """피드에 나타날 수 있는 날짜 목록 (최신순). UTC 저장 기준을 KST 날짜로 변환해 반환."""
+        kst = _kst_date_sql("published_at")
         with self._conn() as c:
             dates = set()
-            # 그룹
-            sql = "SELECT DISTINCT date(published_at) FROM duplicate_groups WHERE published_at IS NOT NULL"
+            sql = f"SELECT DISTINCT {kst} FROM duplicate_groups WHERE published_at IS NOT NULL"
             params = []
             if category:
                 sql += " AND category=?"
@@ -253,8 +258,7 @@ class Repository:
             for row in c.execute(sql, params).fetchall():
                 if row[0]:
                     dates.add(row[0])
-            # 단독 기사
-            sql = "SELECT DISTINCT date(published_at) FROM articles WHERE duplicate_group_id IS NULL AND published_at IS NOT NULL"
+            sql = f"SELECT DISTINCT {kst} FROM articles WHERE duplicate_group_id IS NULL AND published_at IS NOT NULL"
             params = []
             if category:
                 sql += " AND category=?"
@@ -332,7 +336,7 @@ class Repository:
                 sql += " AND source_urls LIKE ?"
                 params.append(f"%{source}%")
             if date_ymd:
-                sql += " AND date(published_at)=?"
+                sql += f" AND {_kst_date_sql('published_at')}=?"
                 params.append(date_ymd)
             sql += " ORDER BY importance DESC, published_at DESC LIMIT ? OFFSET ?"
             params.extend([limit, offset])

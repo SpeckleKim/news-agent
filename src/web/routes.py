@@ -13,12 +13,15 @@ api_router = APIRouter()
 
 
 def _utc_iso(iso_str):
-    """저장된 ISO 시각이 타임존 없을 때 UTC로 해석되도록 'Z' 보강. 프론트 KST 표시용."""
+    """저장된 ISO 시각을 UTC로 통일해 반환. 타임존 없으면 UTC로 간주하고 'Z' 부여. +00:00 → Z. 프론트에서 KST로 표시."""
     if not iso_str:
         return iso_str
     s = str(iso_str).strip()
-    if len(s) >= 19 and s[10] == "T" and "Z" not in s and (len(s) <= 19 or s[-6] not in "-+"):
-        return s.rstrip("Z") + "Z"
+    if len(s) >= 19 and s[10] == "T":
+        if s.endswith("+00:00") or s.endswith("+0000"):
+            return s[:-6].rstrip("Z") + "Z"
+        if "Z" not in s and (len(s) <= 19 or s[-6] not in "-+"):
+            return s.rstrip("Z") + "Z"
     return s
 
 

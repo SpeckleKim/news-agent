@@ -150,12 +150,16 @@ window.MOCK_DATA = {
   }
 };
 
-/** API는 UTC로 전달. 프론트에서는 파싱 후 항상 한국시간(KST)으로 표시 */
+/** API는 UTC(또는 Z 접미사)로 전달. 항상 한국시간(KST)으로 표시. 타임존 없으면 UTC로 해석 */
 function formatDate(isoStr) {
   if (!isoStr) return '';
   var s = String(isoStr).trim();
-  if (s.length >= 10 && s[10] === 'T' && s.indexOf('Z') === -1 && !/[-+]\d{2}:?\d{2}$/.test(s))
-    s = s + 'Z';
+  if (s.length >= 10 && s[10] === 'T') {
+    if (s.indexOf('Z') === -1 && !/[-+]\d{2}:?\d{2}$/.test(s))
+      s = s + 'Z';
+    if (s.endsWith('+00:00') || s.endsWith('+0000'))
+      s = s.replace(/\+00:00$|\+0000$/, 'Z');
+  }
   var d = new Date(s);
   if (isNaN(d.getTime())) return isoStr;
   return d.toLocaleString('ko-KR', {
@@ -165,7 +169,7 @@ function formatDate(isoStr) {
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
-  });
+  }) + ' KST';
 }
 
 function getFeedItems() {
