@@ -6,6 +6,9 @@ schedule:
   interval_minutes: 15
   # 수집 창: 이 시간 안에 나온 뉴스만 수집 (기본 1 = 최근 1시간)
   collect_hours: 1
+  # 기존 DB 기준 주기적 재그룹. 0이면 비활성.
+  regroup_interval_hours: 6
+  regroup_recent_limit: 80
 
 # 수집량: RSS는 소스당 max_entries(기본 100), GNews는 키워드당 max(기본 10, 플랜에 따라 25/50/100 가능)
 sources:
@@ -99,11 +102,11 @@ web:
   session_ttl_hours: 168
 
 dedup:
-  # 같은 사건 다른 매체도 묶이도록. 0.70으로 낮추면 그룹화 많아짐(과도하면 오탐 가능).
-  title_similarity_threshold: 0.70
+  # 같은 사건 다른 매체도 묶이도록. 0.65로 낮춰 같은 내용인데 표현만 다른 경우 더 묶음.
+  title_similarity_threshold: 0.65
   use_embedding: false
   # true면 LLM으로 '사건 식별 문구'를 뽑아서 같은 내용인지 사람처럼 판단 (재그룹·파이프라인 모두 적용)
   use_llm_event_identifier: true
-  # 식별자 유사도가 이 구간일 때 LLM으로 "같은 사건?" 한 번 더 물어봄. 구간 넓히면 묶임 증가.
-  llm_same_event_gray_zone_min: 0.40
-  llm_same_event_gray_zone_max: 0.80
+  # 이 구간이면 LLM으로 "같은 사건?" 재판단. 구간을 넓혀서 애매한 경우도 LLM이 묶도록 함.
+  llm_same_event_gray_zone_min: 0.35
+  llm_same_event_gray_zone_max: 0.85

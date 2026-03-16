@@ -24,6 +24,18 @@ def job(config: dict, max_raw: int = None) -> None:
         logger.exception("Pipeline error: %s", e)
 
 
+def regroup_job(config: dict) -> None:
+    """기존 DB 최근 N건을 주기적으로 재그룹 (그룹핑 품질 보정)."""
+    try:
+        from src.storage.repository import Repository
+        schedule = config.get("schedule") or {}
+        limit = int(schedule.get("regroup_recent_limit") or 80)
+        repo = Repository(config["storage"]["path"])
+        regroup_recent_articles(repo, config, limit=limit)
+    except Exception as e:
+        logger.exception("Regroup job error: %s", e)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--once", action="store_true", help="1회만 수집 후 종료")
@@ -68,10 +80,16 @@ def main() -> None:
         return
 
     from apscheduler.schedulers.blocking import BlockingScheduler
-    interval = int(config.get("schedule", {}).get("interval_minutes", 60))
+    schedule = config.get("schedule") or {}
+    interval = int(schedule.get("interval_minutes") or 60)
+    reg_hours = int(schedule.get("regroup_interval_hours") or 0)
+    reg_limit = int(schedule.get("regroup_recent_limit") or 80)
     scheduler = BlockingScheduler()
     scheduler.add_job(job, "interval", minutes=interval, args=[config], id="collect")
-    logger.info("Scheduler started, interval=%s min", interval)
+    logger.info("Scheduler started, collect interval=%s min", interval)
+    if reg_hours > 0:
+        scheduler.add_job(regroup_job, "interval", hours=reg_hours, args=[config], id="regroup")
+        logger.info("Regroup job every %s hours (recent %s articles)", reg_hours, reg_limit)
     scheduler.start()
 
 

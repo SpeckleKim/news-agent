@@ -256,6 +256,7 @@ def regroup_recent_articles(repo: Repository, config: dict, limit: int = 33) -> 
                     _title_similarity(idi, idj),
                     _title_similarity(ti, idj),
                     _title_similarity(idi, tj),
+                    _title_similarity(ti, tj),
                 )
                 if sim >= threshold:
                     pi, pj = _union_find_parent(parent, i), _union_find_parent(parent, j)

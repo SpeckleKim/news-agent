@@ -141,11 +141,12 @@ def run_dedup(
         for eid in recent_titles:
             etitle, _ = recent_titles[eid]
             ref_e = _ref_recent(eid)
-            # 식별자만 비교하면 LLM이 같은 사건인데 다른 문구를 줄 때 묶이지 않음 → 제목 vs 식별자 조합도 사용
+            # 식별자·제목 조합으로 비교해 같은 내용인데 표현만 다른 경우도 묶이도록
             sim = max(
                 _title_similarity(ref_a, ref_e),
                 _title_similarity(a.title or "", ref_e),
                 _title_similarity(ref_a, etitle or ""),
+                _title_similarity(a.title or "", etitle or ""),
             )
             if sim >= threshold:
                 g = repo.get_group_for_article(eid)
@@ -171,6 +172,7 @@ def run_dedup(
                     _title_similarity(ref_a, ref_b),
                     _title_similarity(a.title or "", ref_b),
                     _title_similarity(ref_a, btitle or ""),
+                    _title_similarity(a.title or "", btitle or ""),
                 )
                 if sim >= threshold:
                     matched_from_batch = b_art
