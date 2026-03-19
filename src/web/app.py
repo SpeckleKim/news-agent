@@ -42,6 +42,13 @@ async def feed_page(request: Request):
     return FileResponse(PROTOTYPE_ROOT / "feed.html")
 
 
+@app.get("/major.html")
+async def major_page(request: Request):
+    if not get_session_id(request) or not is_valid_session(get_session_id(request)):
+        return RedirectResponse("/login", status_code=302)
+    return FileResponse(PROTOTYPE_ROOT / "major.html")
+
+
 @app.get("/search.html")
 async def search_page(request: Request):
     if not get_session_id(request) or not is_valid_session(get_session_id(request)):

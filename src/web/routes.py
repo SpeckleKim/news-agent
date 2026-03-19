@@ -237,6 +237,72 @@ async def search(
     return {"items": items, "total": len(items)}
 
 
+@api_router.get("/highlights")
+async def highlights(
+    _: str = Depends(require_auth),
+    days: int = 7,
+    top_k: int = 12,
+    refresh: int = 0,
+):
+    """
+    주요뉴스(최근 N일) LLM 선별 결과 반환.
+    refresh=1이면 캐시 무시하고 재생성.
+    """
+    repo = get_repo()
+    days = max(1, min(int(days or 7), 30))
+    top_k = max(3, min(int(top_k or 12), 30))
+    cache_key = f"highlights:{days}d:top{top_k}"
+    if not refresh:
+        cached = repo.get_digest(cache_key)
+        if cached and cached.get("payload"):
+            return {"cached": True, **cached["payload"]}
+
+    from src.config import load_config
+    config = load_config()
+    from src.pipeline.run_pipeline import _gemini_client
+    client = _gemini_client(config)
+    candidates = repo.list_major_candidates_last_days(days=days, limit=160)
+    # 후보가 너무 적으면 그대로 importance 상위로 반환
+    if not client or len(candidates) < 3:
+        items = sorted(candidates, key=lambda x: float(x.get("importance") or 0), reverse=True)[:top_k]
+        payload = {"days": days, "top_k": top_k, "editorial_summary": "", "items": items}
+        repo.upsert_digest(cache_key, payload)
+        return {"cached": False, **payload}
+
+    from src.pipeline.gemini_processor import select_major_news
+    gconf = config.get("google_ai") or {}
+    min_interval = float(gconf.get("min_interval_seconds") or 1.0)
+    sel = select_major_news(client, candidates, days=days, top_k=top_k, min_interval=min_interval)
+    if not sel or not sel.get("selected"):
+        items = sorted(candidates, key=lambda x: float(x.get("importance") or 0), reverse=True)[:top_k]
+        payload = {"days": days, "top_k": top_k, "editorial_summary": "", "items": items}
+        repo.upsert_digest(cache_key, payload)
+        return {"cached": False, **payload}
+
+    # selected -> 실제 아이템 매핑 + reason 붙이기
+    idx = {(c["type"], c["id"]): c for c in candidates}
+    out_items = []
+    for s in sel["selected"]:
+        key = (s.get("type"), s.get("id"))
+        c = idx.get(key)
+        if not c:
+            continue
+        item = dict(c)
+        item["reason"] = s.get("reason") or ""
+        out_items.append(item)
+        if len(out_items) >= top_k:
+            break
+
+    payload = {
+        "days": days,
+        "top_k": top_k,
+        "editorial_summary": sel.get("editorial_summary") or "",
+        "items": out_items,
+    }
+    repo.upsert_digest(cache_key, payload)
+    return {"cached": False, **payload}
+
+
 @api_router.get("/articles/{id}")
 async def get_article(id: str, _: str = Depends(require_auth)):
     repo = get_repo()

@@ -50,6 +50,23 @@ a:hover { text-decoration: underline; }
 }
 .app-header .logo:hover { text-decoration: none; }
 
+/* ----- 탭 ----- */
+.tabs { display: flex; gap: 8px; align-items: center; }
+.tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #f9fafb;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 0.92rem;
+  text-decoration: none;
+}
+.tab:hover { text-decoration: none; background: #f3f4f6; }
+.tab-active { background: var(--primary); border-color: var(--primary); color: #fff; }
+
 .app-header .search-form {
   flex: 1;
   min-width: min(480px, 100%);

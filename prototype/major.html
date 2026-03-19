@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>주요뉴스 — 뉴스 에이전트</title>
+  <link rel="stylesheet" href="css/app.css">
+  <script src="js/auth.js"></script>
+  <script>if (!requireAuth()) {};</script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <a href="feed.html" class="logo">뉴스 에이전트</a>
+    <nav class="tabs">
+      <a class="tab" href="feed.html">최신뉴스</a>
+      <a class="tab tab-active" href="major.html">주요뉴스</a>
+    </nav>
+  </header>
+
+  <main class="main-content">
+    <div x-data="majorControls()" x-init="init()">
+      <div class="card controls-card">
+        <div class="controls-row">
+          <div>
+            <h2 class="controls-title mb-0">주요뉴스</h2>
+            <div class="controls-meta text-muted">
+              최근 <span x-text="days"></span>일 · LLM 선별 <span x-text="topK"></span>개
+              <span x-show="cached" class="text-muted"> · (캐시)</span>
+            </div>
+          </div>
+          <div class="controls-actions">
+            <button type="button" class="btn-secondary" @click="refresh(true)">새로 선별</button>
+          </div>
+        </div>
+        <p class="text-muted" x-show="editorialSummary" x-text="editorialSummary"></p>
+      </div>
+
+      <div class="card-list card-list-feed">
+        <template x-if="loading">
+          <p class="text-muted">로딩 중...</p>
+        </template>
+        <template x-if="!loading && !items.length">
+          <p class="text-muted">표시할 주요뉴스가 없습니다.</p>
+        </template>
+
+        <template x-for="item in items" :key="(item.type||'x') + '-' + item.id">
+          <div class="card card-feed"
+               :class="{
+                 'card-important-high': typeof item.importance === 'number' && item.importance >= 90,
+                 'card-important-medium': typeof item.importance === 'number' && item.importance >= 80 && item.importance < 90,
+                 'card-important-low': typeof item.importance === 'number' && item.importance < 80
+               }">
+            <template x-if="item.type === 'group'">
+              <a :href="'group.html?id=' + item.id" class="card-feed-link">
+                <span class="card-feed-title" x-text="item.title || item.merged_title || '통합 뉴스'"></span>
+                <span class="card-feed-meta">
+                  <span class="category" x-text="item.category || ''"></span>
+                  <span x-text="formatDate(item.published_at)"></span>
+                  <span x-show="typeof item.importance === 'number'" x-text="' · ' + item.importance"></span>
+                </span>
+                <p class="text-muted" style="margin:8px 0 0;" x-text="item.reason || ''"></p>
+              </a>
+            </template>
+            <template x-if="item.type !== 'group'">
+              <a :href="'article.html?id=' + item.id" class="card-feed-link">
+                <span class="card-feed-title" x-text="item.title || ''"></span>
+                <span class="card-feed-meta">
+                  <span class="category" x-text="item.category || ''"></span>
+                  <span x-text="formatDate(item.published_at)"></span>
+                  <span x-show="typeof item.importance === 'number'" x-text="' · ' + item.importance"></span>
+                  <span x-show="item.source" x-text="' · ' + item.source"></span>
+                </span>
+                <p class="text-muted" style="margin:8px 0 0;" x-text="item.reason || ''"></p>
+              </a>
+            </template>
+          </div>
+        </template>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/mock-data.js"></script>
+  <script src="js/api-client.js"></script>
+  <script>
+    function majorControls() {
+      return {
+        days: 7,
+        topK: 12,
+        cached: false,
+        editorialSummary: '',
+        items: [],
+        loading: true,
+        init: function () { this.refresh(false); },
+        refresh: function (force) {
+          var me = this;
+          me.loading = true;
+          me.editorialSummary = '';
+          me.items = [];
+          me.cached = false;
+          if (typeof getHighlightsFromAPI !== 'function') {
+            me.loading = false;
+            return;
+          }
+          getHighlightsFromAPI(me.days, me.topK, !!force).then(function (data) {
+            me.cached = !!(data && data.cached);
+            me.editorialSummary = (data && data.editorial_summary) ? data.editorial_summary : '';
+            me.items = (data && data.items) ? data.items : [];
+            me.loading = false;
+          }).catch(function () {
+            me.loading = false;
+          });
+        }
+      };
+    }
+  </script>
+</body>
+</html>
+

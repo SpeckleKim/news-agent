@@ -55,6 +55,17 @@
     return data || { categories: [], keywords: [], sources: [] };
   };
 
+  /** 주요뉴스(최근 N일) */
+  window.getHighlightsFromAPI = async function (days, topK, refresh) {
+    var q = '?';
+    if (typeof days === 'number') q += '&days=' + days;
+    if (typeof topK === 'number') q += '&top_k=' + topK;
+    if (refresh) q += '&refresh=1';
+    if (q === '?') q = '';
+    var data = await fetchApi('/highlights' + q);
+    return data || { days: days || 7, top_k: topK || 12, editorial_summary: '', items: [], cached: false };
+  };
+
   window.searchFromAPI = async function (query) {
     if (!query || !query.trim()) return { items: [], total: 0 };
     var data = await fetchApi('/search?q=' + encodeURIComponent(query.trim()));

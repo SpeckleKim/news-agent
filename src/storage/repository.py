@@ -83,10 +83,106 @@ class Repository:
                     created_at TEXT,
                     updated_at TEXT
                 );
+
+                -- LLM으로 선별한 주요뉴스(주간 하이라이트) 캐시
+                CREATE TABLE IF NOT EXISTS digests (
+                    key TEXT PRIMARY KEY,
+                    payload TEXT,
+                    created_at TEXT,
+                    updated_at TEXT
+                );
             """)
         self._migrate_importance_column()
         self._migrate_headline_column()
         self._migrate_event_identifier_column()
+
+    def get_digest(self, key: str) -> Optional[dict]:
+        if not key:
+            return None
+        with self._conn() as c:
+            c.row_factory = _dict_factory
+            row = c.execute("SELECT * FROM digests WHERE key = ?", (key,)).fetchone()
+        if not row:
+            return None
+        try:
+            payload = json.loads(row.get("payload") or "") if row.get("payload") else None
+        except Exception:
+            payload = None
+        return {
+            "key": row.get("key"),
+            "payload": payload,
+            "created_at": row.get("created_at"),
+            "updated_at": row.get("updated_at"),
+        }
+
+    def upsert_digest(self, key: str, payload: dict) -> None:
+        if not key:
+            return
+        now = datetime.utcnow().isoformat()
+        with self._conn() as c:
+            c.execute(
+                "INSERT INTO digests (key, payload, created_at, updated_at) VALUES (?,?,?,?) "
+                "ON CONFLICT(key) DO UPDATE SET payload=excluded.payload, updated_at=excluded.updated_at",
+                (key, json.dumps(payload, ensure_ascii=False), now, now),
+            )
+
+    def list_major_candidates_last_days(self, days: int = 7, limit: int = 120) -> List[dict]:
+        """최근 N일(KST 기준) 주요뉴스 후보(그룹 + 단독 기사) 반환."""
+        days = max(1, int(days or 7))
+        limit = max(10, min(int(limit or 120), 500))
+        cutoff = f"-{days} days"
+        kst_dt = "datetime(replace(replace(trim(published_at), 'Z', ''), 'T', ' '), '+9 hours')"
+        with self._conn() as c:
+            c.row_factory = _dict_factory
+            groups = c.execute(
+                f"""
+                SELECT id, merged_title, merged_summary, published_at, category, keywords, importance, source_urls
+                FROM duplicate_groups
+                WHERE published_at IS NOT NULL
+                  AND {kst_dt} >= datetime('now', '+9 hours', ?)
+                ORDER BY importance DESC, published_at DESC
+                LIMIT ?
+                """,
+                (cutoff, limit),
+            ).fetchall()
+            arts = c.execute(
+                f"""
+                SELECT id, title, summary, published_at, category, keywords, importance, source
+                FROM articles
+                WHERE duplicate_group_id IS NULL
+                  AND published_at IS NOT NULL
+                  AND {kst_dt} >= datetime('now', '+9 hours', ?)
+                ORDER BY importance DESC, published_at DESC
+                LIMIT ?
+                """,
+                (cutoff, limit),
+            ).fetchall()
+        out: List[dict] = []
+        for g in groups:
+            out.append({
+                "type": "group",
+                "id": g["id"],
+                "title": g.get("merged_title") or "",
+                "summary": g.get("merged_summary") or "",
+                "published_at": g.get("published_at"),
+                "importance": g.get("importance") or 0,
+                "category": g.get("category") or "",
+                "keywords": json.loads(g["keywords"]) if isinstance(g.get("keywords"), str) and g.get("keywords") else [],
+                "source_urls": json.loads(g["source_urls"]) if isinstance(g.get("source_urls"), str) and g.get("source_urls") else [],
+            })
+        for a in arts:
+            out.append({
+                "type": "article",
+                "id": a["id"],
+                "title": a.get("title") or "",
+                "summary": a.get("summary") or "",
+                "published_at": a.get("published_at"),
+                "importance": a.get("importance") or 0,
+                "category": a.get("category") or "",
+                "keywords": json.loads(a["keywords"]) if isinstance(a.get("keywords"), str) and a.get("keywords") else [],
+                "source": a.get("source") or "",
+            })
+        return out
 
     def _migrate_event_identifier_column(self):
         """기존 DB에 event_identifier 컬럼이 없으면 추가."""

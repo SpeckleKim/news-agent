@@ -215,6 +215,102 @@ def headline_from_summary(client_info, summary_or_text: str, min_interval: float
     return (out.strip().strip('"\'')[:200]) if out else None
 
 
+def select_major_news(
+    client_info,
+    candidates: list,
+    days: int = 7,
+    top_k: int = 12,
+    min_interval: float = 1.0,
+) -> Optional[dict]:
+    """
+    최근 N일 후보 중 '주요뉴스' top_k를 LLM으로 선별.
+    반환: {"days": int, "top_k": int, "selected": [{"type","id","reason"}], "editorial_summary": str}
+    """
+    if not client_info or not candidates:
+        return None
+    days = max(1, int(days or 7))
+    top_k = max(3, min(int(top_k or 12), 30))
+
+    def _imp(x):
+        try:
+            return float(x.get("importance") or 0)
+        except Exception:
+            return 0.0
+
+    # 후보는 중요도 상위 중심으로 최대 60개만 넣어 토큰/비용 제한
+    cand = sorted(list(candidates), key=_imp, reverse=True)[:60]
+    lines = []
+    for i, c in enumerate(cand, 1):
+        t = (c.get("title") or "").strip().replace("\n", " ")
+        s = (c.get("summary") or "").strip().replace("\n", " ")
+        pt = (c.get("published_at") or "").strip()
+        imp = c.get("importance")
+        lines.append(f"{i}. [{c.get('type')}:{c.get('id')}] ({pt}) imp={imp} | {t} :: {s[:180]}")
+    catalog = "\n".join(lines)
+
+    contents = f"""너는 뉴스 편집장이다. 아래 후보는 최근 {days}일 내 뉴스(그룹/단독)이다.
+목표: 독자가 '이번 주 꼭 알아야 할' **주요뉴스 {top_k}개**만 고른다.
+
+[선정 기준]
+- 파급력/중요도(산업·시장·정책 영향)
+- 기술·제품의 본질적 변화, 대형 투자/인수/규제/사고
+- 중복 주제는 1개로 압축(같은 사건은 하나만 선택)
+- 너무 사소/지역/포토성은 제외
+
+[출력 형식]
+- 반드시 JSON만 출력
+- 스키마:
+  {{
+    "editorial_summary": "최근 {days}일 핵심을 2~3문장으로",
+    "selected": [
+      {{"type":"group|article","id":"...","reason":"선정 이유 1문장"}},
+      ...
+    ]
+  }}
+- selected는 최대 {top_k}개이며, id는 반드시 후보에 있는 것만 사용.
+
+[후보 목록]
+{catalog}
+"""
+    out = _call_gemini(client_info, contents, min_interval, call_label="highlights_select")
+    if not out:
+        return None
+    try:
+        import json
+        text = out.strip()
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        obj = json.loads(text[start:end])
+        selected = obj.get("selected") or []
+        if not isinstance(selected, list):
+            selected = []
+        allowed = {(c.get("type"), c.get("id")) for c in cand}
+        cleaned = []
+        for it in selected:
+            if not isinstance(it, dict):
+                continue
+            t = (it.get("type") or "").strip()
+            i = (it.get("id") or "").strip()
+            if (t, i) not in allowed:
+                continue
+            cleaned.append({
+                "type": t,
+                "id": i,
+                "reason": (it.get("reason") or "").strip()[:200],
+            })
+            if len(cleaned) >= top_k:
+                break
+        return {
+            "days": days,
+            "top_k": top_k,
+            "editorial_summary": (obj.get("editorial_summary") or "").strip()[:600],
+            "selected": cleaned,
+        }
+    except Exception as e:
+        logger.warning("highlights_select parse failed: %s", e)
+        return None
+
+
 def merge_summaries(client_info, articles: list, min_interval: float = 1.0) -> Optional[str]:
     if not client_info or not articles:
         return None
